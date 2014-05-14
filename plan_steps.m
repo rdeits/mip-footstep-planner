@@ -6,13 +6,14 @@ right_foot_lead = true;
 nom_forward_step = 0.2;
 nom_step_width = 0.26;
 nom_step = [0; nom_step_width; 0; 0];
-goal_pos = struct('right', [2;-0.15;0.1;0;0;0],...
-                  'left',  [2; 0.15;0.1;0;0;0]); 
+goal_pos = struct('right', [50;-0.15;0.1;0;0;0],...
+                  'left',  [50; 0.15;0.1;0;0;0]);
 start = [0;0.15;0;0;0;0];
 R = [rotmat(-start(6)), zeros(2,2);
      zeros(2,2), eye(2)];
-w_goal = [1;1;1;0;0;0];
-w_rel = 0.1 * [1/nom_forward_step;1;1;0;0;0];
+w_goal = 10 * [1;1;1;0;0;0];
+w_rel = 1.2 * [1/nom_forward_step^2;1;1;0;0;0];
+nsteps = 10;
 
 stones = [0, 0.15, 0;
           0.5, 0.15, 0.01;
@@ -29,15 +30,21 @@ safe_regions = struct('A', {}, 'b', {}, 'pt', {}, 'normal', {});
 %   Ai = [Ai, zeros(size(Ai, 1), 1)];
 %   safe_regions(end+1) = struct('A', Ai, 'b', bi, 'pt', [0;0;stones(3,j)], 'normal', [0;0;1]);
 % end
-[Ai, bi] = poly2lincon([-.2, -.2, 2.5,2.5], [-.4, .4, .4, -.4]);
+[Ai, bi] = poly2lincon([-.2, -.2, 5,5], [-.4, .4, .4, -.4]);
 Ai = [Ai, zeros(size(Ai, 1), 1)];
 safe_regions(1) = struct('A', Ai, 'b', bi, 'pt', [0,0,0], 'normal', [0,0,1]);
 nr = length(safe_regions);
 
-nsteps = 8;
 nx = 4 * nsteps;
 ns = nsteps * nr;
 nvar = nx + ns;
+
+% Normalize the goal weight so that the plans don't stretch out as the goal
+% gets farther away
+goal_pos.center = mean([goal_pos.right, goal_pos.left],2);
+dgoal = norm(goal_pos.center(1:2) - start(1:2));
+extra_distance = max(dgoal - (nsteps - 1) * nom_forward_step, 0.01);
+w_goal(1:2) = w_goal(1:2) * sqrt(1 / (extra_distance));
 
 if ~right_foot_lead
   r_ndx = 1:2:nsteps;
@@ -148,6 +155,7 @@ params.timelimit = 5;
 result = gurobi(model, params)
 xstar = result.x;
 steps = xstar(x_ndx);
+diff(steps, 1, 2)
 S = xstar(s_ndx);
 figure(1);
 clf
